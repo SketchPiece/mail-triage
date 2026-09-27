@@ -1,0 +1,17 @@
+{
+  "name": "mail-cleaner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "auth": "node --env-file=.env src/auth.ts",
+    "fetch": "node --env-file=.env src/fetch.ts"
+  },
+  "dependencies": {
+    "@google-cloud/local-auth": "^3.0.1",
+    "@googleapis/gmail": "^22.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "typescript": "^7.0.2"
+  }
+}

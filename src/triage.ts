@@ -20,7 +20,7 @@ export const CATEGORIES: Record<Category, string> = {
 const NEEDS_ACTION = {
   type: "noul",
   instructions:
-    "Does the mailbox owner need to do something because of this email (reply, confirm, pay, accept, review a change, fix a problem, act before a deadline)? Plain receipts, notices that need no response, and marketing are 'no'.",
+    "Does the mailbox owner need to do something because of this email (reply to a person, confirm, pay, accept new terms, review a changed booking, fix a failure, update software, act before a deadline)? 'No' for: receipts, statements, payment confirmations, marketing, and routine sign-in / new device / verification code / 'you connected an app' notices, which only matter if the owner didn't do it.",
 };
 const URGENCY = {
   type: "score",

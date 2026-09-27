@@ -8,7 +8,7 @@ import { listAccounts } from "./sync.ts";
 
 export type Group = "action" | "notable" | "other";
 const NOTABLE: Category[] = ["finance", "travel", "shopping", "personal"];
-const ACTION_MIN = 0.6;
+const ACTION_MIN = 0.7;
 const URGENT_MIN = 1.5;
 
 type Row = {
@@ -26,7 +26,8 @@ type Row = {
 };
 
 export function groupOf(r: Pick<Row, "category" | "needs_action" | "urgency">): Group {
-  if (r.category !== "marketing" && (r.needs_action >= ACTION_MIN || r.urgency >= URGENT_MIN)) return "action";
+  // Urgency alone doesn't make an item actionable (security notices score high); it only orders the list.
+  if (r.category !== "marketing" && r.needs_action >= ACTION_MIN) return "action";
   if (NOTABLE.includes(r.category)) return "notable";
   return "other";
 }

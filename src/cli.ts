@@ -6,9 +6,11 @@
 //   npm run cli -- accounts remove <email>  forget a mailbox and all its local data
 //   npm run cli -- import-cleanup <email>   import sender knowledge from the one-off cleanup (data/*.jsonl)
 //   npm run cli -- sync                     sync all mailboxes now
+//   npm run cli -- retriage [days]          re-run triage on inbox mail from the last N days (default 14)
 import { readFile } from "node:fs/promises";
 import { config } from "./config.ts";
-import { db, upsertMessage, upsertSender, type Category } from "./db.ts";
+import { db, upsertMessage, upsertSender, type Category, type MessageRow } from "./db.ts";
+import { triageMessage } from "./triage.ts";
 import { addAccount, parseFrom } from "./gmail.ts";
 import { accountsInfo } from "./digest.ts";
 import { syncAll } from "./sync.ts";
@@ -80,6 +82,17 @@ if (cmd === "accounts" && !sub) {
     console.log(`${s.account}: fetched ${s.fetched}, triaged ${s.triaged}, label updates ${s.labelUpdates}, errors ${s.errors.length}`);
     for (const e of s.errors.slice(0, 5)) console.log(`  ${e}`);
   }
+} else if (cmd === "retriage") {
+  const since = Date.now() - Number(sub ?? 14) * 864e5;
+  const rows = db
+    .prepare(`SELECT * FROM messages WHERE date >= ? AND labels LIKE '%"INBOX"%'`)
+    .all(since) as unknown as MessageRow[];
+  let n = 0;
+  for (const m of rows) {
+    await triageMessage(m);
+    n++;
+  }
+  console.log(`Re-triaged ${n} messages.`);
 } else {
   console.log(await readFile(new URL(import.meta.url).pathname, "utf8").then((t) => t.split("\n").filter((l) => l.startsWith("//")).join("\n")));
   process.exit(cmd ? 1 : 0);

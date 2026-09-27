@@ -5,7 +5,8 @@
   "scripts": {
     "auth": "node --env-file=.env src/auth.ts",
     "export": "node --env-file=.env src/fetch.ts",
-    "classify": "node --env-file=.env src/classify.ts"
+    "classify": "node --env-file=.env src/classify.ts",
+    "plan": "node src/plan.ts"
   },
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",

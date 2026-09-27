@@ -162,51 +162,53 @@ async function runPool<T, R>(items: T[], fn: (item: T) => Promise<R>, onResult: 
   );
 }
 
-const mode = process.argv[2] ?? "probe";
-const senders = await loadSenders();
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const mode = process.argv[2] ?? "probe";
+  const senders = await loadSenders();
 
-if (mode === "probe") {
-  const s = senders[0];
-  console.log(JSON.stringify(buildRequest(s), null, 2));
-  console.log(JSON.stringify(await decide(buildRequest(s)), null, 2));
-} else if (mode === "eval") {
-  const labels: Record<string, Category> = JSON.parse(await readFile(LABELS, "utf8"));
-  const bySender = new Map(senders.map((s) => [s.email, s]));
-  const items = Object.keys(labels).filter((e) => bySender.has(e)).map((e) => bySender.get(e)!);
-  const results: Classified[] = [];
-  await runPool(items, classify, (r) => void results.push(r));
-  let cost = 0;
-  const bands = [0.8, 0.5, 0].map((min) => ({ min, ok: 0, n: 0 }));
-  const wrong: string[] = [];
-  for (const r of results) {
-    cost += r.cost;
-    const ok = r.category === labels[r.email];
-    const band = bands.find((b) => r.confidence >= b.min)!;
-    band.n++;
-    if (ok) band.ok++;
-    else wrong.push(`  ${r.email}: expected ${labels[r.email]}, got ${r.category} (${r.confidence.toFixed(2)})`);
+  if (mode === "probe") {
+    const s = senders[0];
+    console.log(JSON.stringify(buildRequest(s), null, 2));
+    console.log(JSON.stringify(await decide(buildRequest(s)), null, 2));
+  } else if (mode === "eval") {
+    const labels: Record<string, Category> = JSON.parse(await readFile(LABELS, "utf8"));
+    const bySender = new Map(senders.map((s) => [s.email, s]));
+    const items = Object.keys(labels).filter((e) => bySender.has(e)).map((e) => bySender.get(e)!);
+    const results: Classified[] = [];
+    await runPool(items, classify, (r) => void results.push(r));
+    let cost = 0;
+    const bands = [0.8, 0.5, 0].map((min) => ({ min, ok: 0, n: 0 }));
+    const wrong: string[] = [];
+    for (const r of results) {
+      cost += r.cost;
+      const ok = r.category === labels[r.email];
+      const band = bands.find((b) => r.confidence >= b.min)!;
+      band.n++;
+      if (ok) band.ok++;
+      else wrong.push(`  ${r.email}: expected ${labels[r.email]}, got ${r.category} (${r.confidence.toFixed(2)})`);
+    }
+    const correct = bands.reduce((a, b) => a + b.ok, 0);
+    console.log(`Accuracy ${correct}/${results.length} (${((100 * correct) / results.length).toFixed(1)}%), cost $${cost.toFixed(5)}`);
+    for (const b of bands) console.log(`  confidence ≥${b.min}: ${b.ok}/${b.n}`);
+    if (wrong.length) console.log("Mistakes:\n" + wrong.join("\n"));
+    const missing = Object.keys(labels).filter((e) => !bySender.has(e));
+    if (missing.length) console.log(`Not in export yet: ${missing.length}`);
+  } else if (mode === "all") {
+    const done = new Set<string>();
+    try {
+      for (const line of (await readFile(OUT, "utf8")).split("\n")) if (line) done.add(JSON.parse(line).email);
+    } catch {}
+    const todo = senders.filter((s) => !done.has(s.email));
+    let cost = 0;
+    let n = 0;
+    await runPool(todo, classify, async (r) => {
+      cost += r.cost;
+      await appendFile(OUT, JSON.stringify(r) + "\n");
+      if (++n % 50 === 0 || n === todo.length) process.stdout.write(`\rClassified ${n}/${todo.length}, $${cost.toFixed(4)}`);
+    });
+    console.log(`\nDone → ${OUT}`);
+  } else {
+    console.error(`Unknown mode: ${mode}`);
+    process.exit(1);
   }
-  const correct = bands.reduce((a, b) => a + b.ok, 0);
-  console.log(`Accuracy ${correct}/${results.length} (${((100 * correct) / results.length).toFixed(1)}%), cost $${cost.toFixed(5)}`);
-  for (const b of bands) console.log(`  confidence ≥${b.min}: ${b.ok}/${b.n}`);
-  if (wrong.length) console.log("Mistakes:\n" + wrong.join("\n"));
-  const missing = Object.keys(labels).filter((e) => !bySender.has(e));
-  if (missing.length) console.log(`Not in export yet: ${missing.length}`);
-} else if (mode === "all") {
-  const done = new Set<string>();
-  try {
-    for (const line of (await readFile(OUT, "utf8")).split("\n")) if (line) done.add(JSON.parse(line).email);
-  } catch {}
-  const todo = senders.filter((s) => !done.has(s.email));
-  let cost = 0;
-  let n = 0;
-  await runPool(todo, classify, async (r) => {
-    cost += r.cost;
-    await appendFile(OUT, JSON.stringify(r) + "\n");
-    if (++n % 50 === 0 || n === todo.length) process.stdout.write(`\rClassified ${n}/${todo.length}, $${cost.toFixed(4)}`);
-  });
-  console.log(`\nDone → ${OUT}`);
-} else {
-  console.error(`Unknown mode: ${mode}`);
-  process.exit(1);
 }

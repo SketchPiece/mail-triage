@@ -3,6 +3,8 @@
 //   pnpm -s run classify probe            one sender, prints the raw response
 //   pnpm -s run classify eval             senders from data/labels.json, prints accuracy
 //   pnpm -s run classify all              every sender → data/classified.jsonl (resumable)
+//   pnpm -s run classify messages         inbox messages of "review" senders (from data/plan.json)
+//                                         → data/classified-messages.jsonl (resumable)
 import { readFile, appendFile } from "node:fs/promises";
 import type { MessageMeta } from "./fetch.ts";
 
@@ -10,6 +12,7 @@ const ROOT = new URL("..", import.meta.url).pathname;
 const MESSAGES = ROOT + "data/messages.jsonl";
 const LABELS = ROOT + "data/labels.json";
 const OUT = ROOT + "data/classified.jsonl";
+const OUT_MESSAGES = ROOT + "data/classified-messages.jsonl";
 const ENDPOINT = "https://openrouter.ai/api/alpha/decisions";
 const MODEL = "typesafe/jev-1.13";
 const CONCURRENCY = 8;
@@ -160,6 +163,66 @@ async function classify(s: Sender): Promise<Classified> {
   };
 }
 
+export type ClassifiedMessage = { id: string; email: string; category: Category; confidence: number; cost: number };
+
+async function classifyMessage(m: MessageMeta): Promise<ClassifiedMessage> {
+  const res = await decide({
+    model: MODEL,
+    state: {
+      from: clean(m.from, 150),
+      subject: clean(m.subject, 200),
+      snippet: clean(m.snippet, 300),
+      has_unsubscribe_header: Boolean(m.listUnsubscribe),
+    },
+    questions: {
+      category: {
+        type: "choice",
+        instructions: "Which kind of email is this? Judge by the sender, subject and snippet.",
+        criteria: CATEGORIES,
+      },
+    },
+  });
+  const c = res.answers.category;
+  return {
+    id: m.id,
+    email: parseFrom(m.from).email,
+    category: c.choice,
+    confidence: c.confidence ?? c.probabilities?.[c.choice] ?? 0,
+    cost: res.usage?.cost ?? 0,
+  };
+}
+
+// Runs fn over items not yet present in outPath (keyed by key), appending results as JSONL.
+async function runResumable<T, R extends { cost: number }>(
+  items: T[],
+  itemKey: (item: T) => string,
+  resultKey: (r: R) => string,
+  fn: (item: T) => Promise<R>,
+  outPath: string,
+) {
+  const done = new Set<string>();
+  try {
+    for (const line of (await readFile(outPath, "utf8")).split("\n")) if (line) done.add(resultKey(JSON.parse(line)));
+  } catch {}
+  const todo = items.filter((it) => !done.has(itemKey(it)));
+  let cost = 0;
+  let n = 0;
+  const failed: string[] = [];
+  const safe = (it: T) =>
+    fn(it).catch((err) => {
+      failed.push(`${itemKey(it)}: ${String(err.message).slice(0, 200)}`);
+      return null;
+    });
+  await runPool(todo, safe, async (r) => {
+    if (!r) return;
+    cost += r.cost;
+    await appendFile(outPath, JSON.stringify(r) + "\n");
+    if (++n % 50 === 0 || n === todo.length) process.stdout.write(`\rClassified ${n}/${todo.length}, $${cost.toFixed(4)}`);
+  });
+  console.log(`\nDone → ${outPath}`);
+  if (failed.length) console.log(`Failed ${failed.length} (rerun to retry):\n  ` + failed.join("\n  "));
+}
+
 async function runPool<T, R>(items: T[], fn: (item: T) => Promise<R>, onResult: (r: R, i: number) => Promise<void> | void) {
   let next = 0;
   await Promise.all(
@@ -204,27 +267,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const missing = Object.keys(labels).filter((e) => !bySender.has(e));
     if (missing.length) console.log(`Not in export yet: ${missing.length}`);
   } else if (mode === "all") {
-    const done = new Set<string>();
-    try {
-      for (const line of (await readFile(OUT, "utf8")).split("\n")) if (line) done.add(JSON.parse(line).email);
-    } catch {}
-    const todo = senders.filter((s) => !done.has(s.email));
-    let cost = 0;
-    let n = 0;
-    const failed: string[] = [];
-    const safeClassify = (s: Sender) =>
-      classify(s).catch((err) => {
-        failed.push(`${s.email}: ${String(err.message).slice(0, 200)}`);
-        return null;
-      });
-    await runPool(todo, safeClassify, async (r) => {
-      if (!r) return;
-      cost += r.cost;
-      await appendFile(OUT, JSON.stringify(r) + "\n");
-      if (++n % 50 === 0 || n === todo.length) process.stdout.write(`\rClassified ${n}/${todo.length}, $${cost.toFixed(4)}`);
-    });
-    console.log(`\nDone → ${OUT}`);
-    if (failed.length) console.log(`Failed ${failed.length} (rerun to retry):\n  ` + failed.join("\n  "));
+    await runResumable(senders, (s) => s.email, (r: Classified) => r.email, classify, OUT);
+  } else if (mode === "messages") {
+    const plan: { email: string; action: string }[] = JSON.parse(await readFile(ROOT + "data/plan.json", "utf8"));
+    const review = new Set(plan.filter((p) => p.action === "review").map((p) => p.email));
+    const messages: MessageMeta[] = [];
+    for (const line of (await readFile(MESSAGES, "utf8")).split("\n")) {
+      if (!line) continue;
+      const m: MessageMeta = JSON.parse(line);
+      if (m.labels.includes("INBOX") && review.has(parseFrom(m.from).email)) messages.push(m);
+    }
+    await runResumable(messages, (m) => m.id, (r: ClassifiedMessage) => r.id, classifyMessage, OUT_MESSAGES);
   } else {
     console.error(`Unknown mode: ${mode}`);
     process.exit(1);

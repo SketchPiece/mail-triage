@@ -48,6 +48,16 @@ export type Classified = {
   cost: number;
 };
 
+// Collapses whitespace/invisible filler chars and truncates by code point so emoji are never split.
+// Invisible filler chars that newsletters pad snippets with (soft hyphen, CGJ, zero-width, BOM, ...).
+const INVISIBLE = [0x00ad, 0x034f, 0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x2028, 0x2029, 0xfeff];
+const NOISE = new RegExp("[\\s\\p{Cc}" + String.fromCodePoint(...INVISIBLE) + "]+", "gu");
+
+function clean(text: string, max: number) {
+  const flat = text.replace(NOISE, " ").trim();
+  return Array.from(flat).slice(0, max).join("").toWellFormed();
+}
+
 function parseFrom(from: string) {
   const m = from.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>/);
   return m ? { name: m[1].trim(), email: m[2].toLowerCase() } : { name: "", email: from.trim().toLowerCase() };
@@ -84,7 +94,7 @@ export async function loadSenders(): Promise<Sender[]> {
       const key = m.subject.replace(/[\d#$.,]+/g, "").trim();
       if (seen.has(key)) continue;
       seen.add(key);
-      sender.samples.push({ subject: m.subject, snippet: m.snippet.replace(/[\s͏‌﻿]+/g, " ").slice(0, 160) });
+      sender.samples.push({ subject: clean(m.subject, 200), snippet: clean(m.snippet, 160) });
       if (sender.samples.length === SAMPLES) break;
     }
   }
@@ -95,7 +105,7 @@ function buildRequest(s: Sender) {
   return {
     model: MODEL,
     state: {
-      sender: s.name ? `${s.name} <${s.email}>` : s.email,
+      sender: s.name ? `${clean(s.name, 100)} <${s.email}>` : s.email,
       emails_received: s.count,
       share_with_unsubscribe_header: Number((s.withUnsubscribe / s.count).toFixed(2)),
       recent_emails: s.samples,
@@ -201,12 +211,20 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const todo = senders.filter((s) => !done.has(s.email));
     let cost = 0;
     let n = 0;
-    await runPool(todo, classify, async (r) => {
+    const failed: string[] = [];
+    const safeClassify = (s: Sender) =>
+      classify(s).catch((err) => {
+        failed.push(`${s.email}: ${String(err.message).slice(0, 200)}`);
+        return null;
+      });
+    await runPool(todo, safeClassify, async (r) => {
+      if (!r) return;
       cost += r.cost;
       await appendFile(OUT, JSON.stringify(r) + "\n");
       if (++n % 50 === 0 || n === todo.length) process.stdout.write(`\rClassified ${n}/${todo.length}, $${cost.toFixed(4)}`);
     });
     console.log(`\nDone → ${OUT}`);
+    if (failed.length) console.log(`Failed ${failed.length} (rerun to retry):\n  ` + failed.join("\n  "));
   } else {
     console.error(`Unknown mode: ${mode}`);
     process.exit(1);

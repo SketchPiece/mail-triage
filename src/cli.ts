@@ -64,8 +64,17 @@ if (cmd === "accounts" && !sub) {
     });
     messages++;
   }
+  // The export predates the cleanup: drop INBOX from everything apply.ts archived.
+  let archived = 0;
+  try {
+    const ids: string[] = JSON.parse(await readFile(`${config.dataDir}/archived-ids.json`, "utf8"));
+    const stmt = db.prepare(
+      `UPDATE messages SET labels = (SELECT json_group_array(value) FROM json_each(labels) WHERE value != 'INBOX') WHERE account = ? AND id = ?`,
+    );
+    for (const id of ids) archived += Number(stmt.run(account, id).changes);
+  } catch {}
   db.exec("COMMIT");
-  console.log(`Imported ${senders} senders and ${messages} messages for ${account}.`);
+  console.log(`Imported ${senders} senders and ${messages} messages for ${account} (${archived} marked archived).`);
 } else if (cmd === "sync") {
   for (const s of await syncAll()) {
     console.log(`${s.account}: fetched ${s.fetched}, triaged ${s.triaged}, label updates ${s.labelUpdates}, errors ${s.errors.length}`);

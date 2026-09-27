@@ -3,7 +3,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { loadSenders, type Classified, type Sender } from "./classify.ts";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = new URL("../..", import.meta.url).pathname;
 const MIN_CONFIDENCE = 0.8;
 const MAX_MIXED = 0.5;
 // Newsletters the owner wants to keep receiving (archived, but not unsubscribed).

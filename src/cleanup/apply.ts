@@ -7,7 +7,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { getGmail } from "./auth.ts";
 import type { Actions } from "./actions.ts";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = new URL("../..", import.meta.url).pathname;
 const ARCHIVED_LOG = ROOT + "data/archived-ids.json";
 const UNSUB_LOG = ROOT + "data/unsubscribe-results.json";
 const BATCH = 1000; // batchModify limit

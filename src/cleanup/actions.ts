@@ -5,7 +5,7 @@ import type { MessageMeta } from "./fetch.ts";
 import type { ClassifiedMessage } from "./classify.ts";
 import type { PlanItem } from "./plan.ts";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = new URL("../..", import.meta.url).pathname;
 const MIN_CONFIDENCE = 0.8;
 // Keep fresh service mail (security alerts, billing warnings) in the inbox.
 const KEEP_RECENT_SERVICE_MS = 14 * 864e5;

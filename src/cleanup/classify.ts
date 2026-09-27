@@ -8,7 +8,7 @@
 import { readFile, appendFile } from "node:fs/promises";
 import type { MessageMeta } from "./fetch.ts";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = new URL("../..", import.meta.url).pathname;
 const MESSAGES = ROOT + "data/messages.jsonl";
 const LABELS = ROOT + "data/labels.json";
 const OUT = ROOT + "data/classified.jsonl";

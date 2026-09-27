@@ -5,7 +5,7 @@ import { auth, gmail as createGmail } from "@googleapis/gmail";
 // Use the auth library bundled with @googleapis/gmail so client instances match its version.
 type OAuth2Client = InstanceType<typeof auth.OAuth2>;
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = new URL("../..", import.meta.url).pathname;
 const CREDENTIALS_PATH = ROOT + "credentials.json";
 const TOKEN_PATH = ROOT + "token.json";
 

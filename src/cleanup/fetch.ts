@@ -3,7 +3,7 @@
 import { mkdir, readFile, writeFile, appendFile } from "node:fs/promises";
 import { getGmail } from "./auth.ts";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = new URL("../..", import.meta.url).pathname;
 const OUT = ROOT + "data/messages.jsonl";
 const IDS = ROOT + "data/ids.json";
 const CONCURRENCY = 5;

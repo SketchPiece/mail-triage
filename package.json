@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "auth": "node --env-file=.env src/auth.ts",
-    "fetch": "node --env-file=.env src/fetch.ts"
+    "export": "node --env-file=.env src/fetch.ts"
   },
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",

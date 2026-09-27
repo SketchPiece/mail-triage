@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "mail-triage": {
+      "type": "http",
+      "url": "${MAIL_TRIAGE_URL:-http://127.0.0.1:8790/mcp}",
+      "headers": { "Authorization": "Bearer ${MAIL_TRIAGE_TOKEN}" }
+    }
+  }
+}

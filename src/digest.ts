@@ -1,7 +1,7 @@
 // Read models over triaged mail: digest groups, filtered lists, single message.
 // Output is compact and speakable: a voice assistant reads it and retells it in its own words.
 import { config } from "./config.ts";
-import { db, labelsOf, type Category } from "./db.ts";
+import { db, labelsOf, setShown, type Category } from "./db.ts";
 import { getBodyText } from "./gmail.ts";
 import { clean } from "./triage.ts";
 import { listAccounts } from "./sync.ts";
@@ -32,6 +32,14 @@ export function groupOf(r: Pick<Row, "category" | "needs_action" | "urgency">): 
   return "other";
 }
 
+const isUnread = (r: Pick<Row, "labels">) => labelsOf(r).includes("UNREAD");
+
+// Remembers what this answer shows, so a later "mark them read" touches exactly these messages.
+function remember(rows: Row[]) {
+  setShown(rows.map((r) => ({ account: r.account, id: r.id })));
+  return rows.filter(isUnread).length;
+}
+
 const urgencyLabel = (u: number) => (u >= URGENT_MIN ? "today" : u >= 0.75 ? "this week" : "no rush");
 
 const fmt = new Intl.DateTimeFormat("en-CA", {
@@ -52,7 +60,7 @@ function item(r: Row, withSnippet: boolean) {
     category: r.category,
     ...(groupOf(r) === "action" ? { urgency: urgencyLabel(r.urgency) } : {}),
     received: fmt.format(r.date),
-    unread: labelsOf(r).includes("UNREAD"),
+    unread: isUnread(r),
     ...(withSnippet ? { snippet: clean(r.snippet, 140) } : {}),
   };
 }
@@ -98,6 +106,9 @@ export function digest(opts: { account?: string; sinceHours?: number; detail?: "
   const notable = byGroup("notable");
   const other = byGroup("other");
   const full = opts.detail === "full";
+  const shownAction = action.slice(0, full ? 30 : 5);
+  const shownNotable = full ? notable.slice(0, 30) : [];
+  const unreadShown = remember([...shownAction, ...shownNotable]);
 
   const countBy = (list: Row[]) =>
     list.reduce<Record<string, number>>((acc, r) => ((acc[r.category] = (acc[r.category] ?? 0) + 1), acc), {});
@@ -106,16 +117,19 @@ export function digest(opts: { account?: string; sinceHours?: number; detail?: "
     accounts,
     window_hours: sinceHours,
     totals: { in_inbox: rows.length, action: action.length, notable: notable.length, other: other.length },
-    action: action.slice(0, full ? 30 : 5).map((r) => item(strip(r), full)),
+    action: shownAction.map((r) => item(strip(r), full)),
     notable: full
-      ? notable.slice(0, 30).map((r) => item(strip(r), false))
+      ? shownNotable.map((r) => item(strip(r), false))
       : Object.entries(countBy(notable)).map(([category, count]) => ({
           category,
           count,
           examples: notable.filter((r) => r.category === category).slice(0, 2).map((r) => `${r.from_name || r.from_email}: ${clean(r.subject, 60)}`),
         })),
     other_by_category: countBy(other),
-    hint: "Say the action items first, then one sentence per notable category. Offer details via list(group or category) and read(id).",
+    unread_shown: unreadShown,
+    hint:
+      "Say the action items first, then one sentence per notable category. Offer details via list(group or category) and read(id)." +
+      (unreadShown ? " Then ask whether to mark the listed unread messages as read; call mark_read only after a clear yes." : ""),
   };
 }
 
@@ -139,10 +153,16 @@ export function list(opts: {
   if (opts.group) rows = rows.filter((r) => groupOf(r) === opts.group);
   const limit = Math.min(opts.limit ?? 10, 30);
   const multi = accounts.length > 1;
+  const shown = rows.slice(0, limit);
+  const unreadShown = remember(shown);
   return {
     total: rows.length,
-    shown: Math.min(limit, rows.length),
-    items: rows.slice(0, limit).map((r) => item(multi ? r : { ...r, account: "" }, true)),
+    shown: shown.length,
+    unread_shown: unreadShown,
+    items: shown.map((r) => item(multi ? r : { ...r, account: "" }, true)),
+    ...(unreadShown
+      ? { hint: "After retelling, ask whether to mark the unread ones as read; call mark_read only after a clear yes." }
+      : {}),
   };
 }
 

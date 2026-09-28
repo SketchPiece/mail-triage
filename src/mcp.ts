@@ -2,6 +2,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { accountsInfo, digest, list, read } from "./digest.ts";
+import { markRead, MAX_IDS } from "./mark.ts";
 import { syncAll } from "./sync.ts";
 
 const CATEGORY = z.enum(["marketing", "service", "finance", "shopping", "travel", "personal"]);
@@ -129,6 +130,38 @@ export function createMcpServer() {
         const result = await Promise.race([run, new Promise<null>((r) => setTimeout(() => r(null), SYNC_WAIT_MS))]);
         if (!result) return json({ status: "still running in background; call digest shortly" });
         return json(result.map((s) => ({ account: s.account, new_messages: s.triaged, errors: s.errors.length })));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mark_read",
+    {
+      title: "Mark mail read",
+      description:
+        "Marks messages as read in Gmail. Works only on messages the last digest or list call showed (within 30 minutes) and only removes the unread mark: nothing is archived, moved or deleted. Call only after the owner clearly asked for it or said yes to \"mark them read?\". Pass ids to mark some of the shown messages; omit ids to mark everything the last digest or list showed.",
+      inputSchema: {
+        ids: z
+          .array(z.string())
+          .min(1)
+          .max(MAX_IDS)
+          .optional()
+          .describe("Ids from the last digest or list. Omit to mark all messages it showed."),
+        account: ACCOUNT,
+      },
+      annotations: {
+        title: "Mark mail read",
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ ids, account }) => {
+      try {
+        return json(await markRead({ ids, account }));
       } catch (err) {
         return fail(err);
       }

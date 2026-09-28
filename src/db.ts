@@ -80,6 +80,13 @@ db.exec(`
     created_at INTEGER NOT NULL,
     PRIMARY KEY (account, message_id)
   );
+  -- Messages the last digest or list showed the owner. mark_read may only touch these.
+  CREATE TABLE IF NOT EXISTS shown (
+    account TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    shown_at INTEGER NOT NULL,
+    PRIMARY KEY (account, message_id)
+  );
 `);
 
 export const labelsOf = (m: Pick<MessageRow, "labels">): string[] => JSON.parse(m.labels);
@@ -107,6 +114,25 @@ export function getSender(account: string, email: string) {
   return db.prepare(`SELECT * FROM senders WHERE account = ? AND email = ?`).get(account, email) as
     | { category: Category; confidence: number; mixed: number; source: string }
     | undefined;
+}
+
+// Replaces the shown set: only what the owner just heard about can be marked read.
+export function setShown(items: { account: string; id: string }[]) {
+  const now = Date.now();
+  db.exec("BEGIN");
+  try {
+    db.exec(`DELETE FROM shown`);
+    const insert = db.prepare(`INSERT OR IGNORE INTO shown (account, message_id, shown_at) VALUES (?, ?, ?)`);
+    for (const m of items) insert.run(m.account, m.id, now);
+    db.exec("COMMIT");
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  }
+}
+
+export function getShown(sinceMs: number) {
+  return db.prepare(`SELECT account, message_id AS id FROM shown WHERE shown_at >= ?`).all(sinceMs) as { account: string; id: string }[];
 }
 
 export function upsertSender(account: string, email: string, s: { category: Category; confidence: number; mixed: number; source: string }) {

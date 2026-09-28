@@ -194,3 +194,10 @@ export async function getBodyText(account: string, id: string): Promise<string> 
   const text = plain || htmlToText(html);
   return text.replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n\n").trim();
 }
+
+// Removes only the UNREAD label from exactly these messages; every other label stays as is.
+export async function removeUnread(account: string, ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const g = await gmailFor(account);
+  await withRetry(() => g.users.messages.batchModify({ userId: "me", requestBody: { ids, removeLabelIds: ["UNREAD"] } }));
+}

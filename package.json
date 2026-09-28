@@ -10,7 +10,8 @@
     "cleanup:plan": "node src/cleanup/plan.ts",
     "cleanup:actions": "node src/cleanup/actions.ts",
     "apply": "node src/cleanup/apply.ts",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "test": "node --test 'src/**/*.test.ts'"
   },
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",

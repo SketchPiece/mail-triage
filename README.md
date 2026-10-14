@@ -180,4 +180,4 @@ CI runs both on every push and pull request (`.github/workflows/ci.yml`).
 
 ## License
 
-[MIT](LICENSE) © 2026 Andrew Lubkin
+[MIT](LICENSE) © 2026 Andrew Liubkin

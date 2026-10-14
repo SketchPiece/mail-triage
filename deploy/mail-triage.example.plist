@@ -1,10 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Copy to ~/Library/LaunchAgents/, replace __DIR__ and __NODE__, then:
-     launchctl load ~/Library/LaunchAgents/com.sketchpiece.mail-triage.plist -->
+<!-- launchd template for running mail-triage as a per-user background service on macOS.
+     Fill in the placeholders and install:
+
+       sed -e "s|__LABEL__|com.$USER.mail-triage|g" \
+           -e "s|__DIR__|$PWD|g" \
+           -e "s|__NODE__|$(command -v node)|g" \
+           deploy/mail-triage.example.plist > ~/Library/LaunchAgents/com.$USER.mail-triage.plist
+       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.$USER.mail-triage.plist
+
+     __DIR__ is the repo checkout (it must contain .env and credentials.json). -->
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.sketchpiece.mail-triage</string>
+  <key>Label</key><string>__LABEL__</string>
   <key>ProgramArguments</key>
   <array>
     <string>__NODE__</string>

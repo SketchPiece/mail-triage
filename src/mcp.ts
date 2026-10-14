@@ -54,7 +54,7 @@ export function createMcpServer() {
         account: ACCOUNT,
         group: z.enum(["action", "notable", "other"]).optional(),
         category: CATEGORY.optional(),
-        sender: z.string().optional().describe("Part of the sender's name or address, e.g. 'Delta' or 'Stripe'."),
+        sender: z.string().optional().describe("Part of the sender's name or address, e.g. 'delta' or 'stripe'."),
         since_hours: z.number().int().min(1).max(24 * 365).optional().describe("Default: 7 days, or 90 days when filtering by sender."),
         include_archived: z.boolean().optional().describe("Also include messages no longer in the inbox. Default false."),
         limit: z.number().int().min(1).max(30).optional().describe("Default 10."),

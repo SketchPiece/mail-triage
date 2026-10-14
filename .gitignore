@@ -1,6 +1,18 @@
+# Secrets: Google OAuth client, refresh tokens, env
 credentials.json
+client_secret*.json
 token.json
 token*.json
 .env
-node_modules/
+.env.*
+!.env.example
+
+# Local mailbox data: SQLite store, exports, logs
 data/
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+node_modules/
+.DS_Store
